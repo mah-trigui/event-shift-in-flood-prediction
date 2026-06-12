@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Shift in Flood Prediction</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="container">
+      <h1>When Train and Test Are Different Events, Feature Importance Changes</h1>
+      <p class="subtitle">
+        Flood prediction across events using physically invariant spatial structure
+      </p>
+      <div class="hero-buttons">
+        <a href="https://github.com/mah-trigui/event-shift-in-flood-prediction" class="btn primary">View Repository</a>
+        <a href="#idea" class="btn secondary">Explore Method</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container">
+        <h2>Overview</h2>
+        <p>
+          This project predicts flood extent in Malawi under an event-shift setting: training data comes from one flood event, while predictions are required for a different later event.
+        </p>
+        <p>
+          That changes the modeling problem. The main question is no longer just which algorithm fits best, but which features are stable enough to transfer across floods with different rainfall patterns and storm behavior.
+        </p>
+        <p>
+          The feature strategy therefore prioritized physical landscape invariants over event-specific fingerprints.
+        </p>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>Architecture</h2>
+        <img src="images/architecture.jpg" alt="Flood event shift and invariant features" class="architecture-image" />
+      </div>
+    </section>
+
+    <section class="section" id="idea">
+      <div class="container">
+        <h2>The Core Idea</h2>
+        <p>
+          When train and test come from different events, historical signal is not equally transferable.
+        </p>
+        <p>
+          Rainfall triggers flooding, but terrain and soil structure control where water can accumulate, drain, or infiltrate. Those mechanisms are more stable across events than the exact rainfall signature of a single past storm.
+        </p>
+        <div class="metric-box">
+          <p><strong>Under event shift, favor physically invariant structure over event-specific detail.</strong></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>Feature families used</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Terrain derivatives</h3>
+            <p>
+              Slope, aspect, roughness, terrain position, and flow direction were derived from elevation to capture water movement and accumulation.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Soil properties</h3>
+            <p>
+              Drainage, parent material, erosion, and related soil variables were used as infiltration and pooling controls.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Event rainfall</h3>
+            <p>
+              Rainfall remained important, but some early weak-signal weekly columns were dropped to avoid over-weighting event-specific noise.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Target-aware diagnostics</h3>
+            <p>
+              Auxiliary zero-inflation targets were created to better understand a highly sparse flood-fraction response.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <h2>Selected implementation details</h2>
+        <ul class="clean-list">
+          <li>terrain raster built from X / Y / elevation fields</li>
+          <li>slope, aspect, TPI, TRI, roughness, flow direction, and hillshade extracted back to grid squares</li>
+          <li>soil categoricals cleaned and harmonized into reusable factor levels</li>
+          <li>zero-inflation proxies created for exploratory decomposition of flood severity</li>
+          <li>predictions clipped to the valid target range [0, 1]</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>Selected code snippets</h2>
+
+        <h3>1. Terrain derivatives</h3>
+        <pre>
+terrain_stack <- raster::terrain(
+    rast_elev,
+    opt = c("slope", "aspect", "tpi", "tri", "roughness", "flowdir"),
+    unit = "degrees",
+    neighbors = 8
+)
+        </pre>
+
+        <h3>2. Zero-inflation auxiliary targets</h3>
+        <pre>
+all$bin[train_rows & all$target == 0] <- "0"
+all$bin[train_rows & all$target > 0] <- "1"
+
+all$zero[train_rows & all$target == 0] <- "0"
+all$zero[train_rows & all$target > 0 & all$target < 0.6] <- "1"
+all$zero[train_rows & all$target >= 0.6] <- "2"
+        </pre>
+
+        <h3>3. Remove weak event-specific rainfall columns</h3>
+        <pre>
+drop_vars <- c("srt_let", "slope", "tri", "soil_dist", "week_1", "week_2", "week_3")
+drop_vars <- intersect(drop_vars, names(all))
+all <- all[, !names(all) %in% drop_vars, with = FALSE]
+        </pre>
+
+        <h3>4. Clip predictions to valid flood fraction range</h3>
+        <pre>
+clip_predictions <- function(x) pmax(0, pmin(1, x))
+        </pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <h2>Why this matters</h2>
+        <ul class="clean-list">
+          <li>event shift is different from ordinary row-wise generalization</li>
+          <li>physically stable features are often more transferable than historical event fingerprints</li>
+          <li>feature selection should reflect the kind of distribution shift expected at deployment time</li>
+          <li>the principle generalizes to wildfire, drought, storm, and other environmental prediction tasks</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="container">
+        <h2>Key Takeaway</h2>
+        <div class="metric-box">
+          <p><strong>When train and test are different events, feature quality depends on transferability, not just predictive power.</strong></p>
+          <p>
+            Mechanistic and physically invariant structure often survives event shift better than the fingerprint of a single past event.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Built as a public project showcase for event-shift generalization and physically invariant feature design.</p>
+    </div>
+  </footer>
+</body>
+</html>
